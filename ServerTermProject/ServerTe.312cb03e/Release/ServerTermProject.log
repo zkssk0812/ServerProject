@@ -1,0 +1,24 @@
+﻿  GameServer.cpp
+C:\Users\김정호\Desktop\Test\ServerTermProject\GameServer.h(25,7): warning C4200: 비표준 확장이 사용됨: 구조체/공용 구조체의 배열 크기가 0입니다.
+  (소스 파일 'GameServer.cpp'을(를) 컴파일하는 중)
+      C:\Users\김정호\Desktop\Test\ServerTermProject\GameServer.h(25,7):
+      이 멤버는 기본값으로 설정된 생성자 또는 복사/이동 대입 연산자에서 무시됩니다.
+  
+C:\Users\김정호\Desktop\Test\ServerTermProject\GameServer.h(22,15): warning C4091: 'extern ': 변수를 선언하지 않으면 'BaseTask' 왼쪽은 무시됩니다.
+  (소스 파일 'GameServer.cpp'을(를) 컴파일하는 중)
+  
+C:\Users\김정호\Desktop\Test\ServerTermProject\GameServer.cpp(89,30): error C2661: 'BaseTask::BaseTask': 오버로드된 함수에서 3개의 인수를 사용하지 않습니다.
+      C:\Users\김정호\Desktop\Test\ServerTermProject\GameServer.cpp(89,30):
+      인수 목록 '(SOCKET, int, const char [1])'을(를) 일치시키는 동안
+  
+  main.cpp
+C:\Users\김정호\Desktop\Test\ServerTermProject\GameServer.h(25,7): warning C4200: 비표준 확장이 사용됨: 구조체/공용 구조체의 배열 크기가 0입니다.
+  (소스 파일 'main.cpp'을(를) 컴파일하는 중)
+      C:\Users\김정호\Desktop\Test\ServerTermProject\GameServer.h(25,7):
+      이 멤버는 기본값으로 설정된 생성자 또는 복사/이동 대입 연산자에서 무시됩니다.
+  
+C:\Users\김정호\Desktop\Test\ServerTermProject\GameServer.h(22,15): warning C4091: 'extern ': 변수를 선언하지 않으면 'BaseTask' 왼쪽은 무시됩니다.
+  (소스 파일 'main.cpp'을(를) 컴파일하는 중)
+  
+  Socket.cpp
+  ThreadSafeQueue.cpp
