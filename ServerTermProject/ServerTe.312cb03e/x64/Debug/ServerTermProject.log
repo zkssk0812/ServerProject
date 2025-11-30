@@ -1,17 +1,4 @@
 ﻿  GameServer.cpp
-C:\Users\김정호\Desktop\Test\ServerTermProject\GameServer.h(24,7): warning C4200: 비표준 확장이 사용됨: 구조체/공용 구조체의 배열 크기가 0입니다.
-  (소스 파일 'GameServer.cpp'을(를) 컴파일하는 중)
-      C:\Users\김정호\Desktop\Test\ServerTermProject\GameServer.h(24,7):
-      이 멤버는 기본값으로 설정된 생성자 또는 복사/이동 대입 연산자에서 무시됩니다.
-  
-  main.cpp
-C:\Users\김정호\Desktop\Test\ServerTermProject\GameServer.h(24,7): warning C4200: 비표준 확장이 사용됨: 구조체/공용 구조체의 배열 크기가 0입니다.
-  (소스 파일 'main.cpp'을(를) 컴파일하는 중)
-      C:\Users\김정호\Desktop\Test\ServerTermProject\GameServer.h(24,7):
-      이 멤버는 기본값으로 설정된 생성자 또는 복사/이동 대입 연산자에서 무시됩니다.
-  
-  ThreadSafeQueue.cpp
+  Socket.cpp
   코드를 생성하고 있습니다...
-GameServer.obj : error LNK2019: "public: void __cdecl GameServer::run(void)" (?run@GameServer@@QEAAXXZ)"public: void __cdecl GameServer::ready(void)" (?ready@GameServer@@QEAAXXZ) 함수에서 참조되는 확인할 수 없는 외부 기호
-GameServer.obj : error LNK2019: "private: static unsigned long __cdecl GameServer::ClientThread(void *)" (?ClientThread@GameServer@@CAKPEAX@Z)"public: void __cdecl GameServer::ready(void)" (?ready@GameServer@@QEAAXXZ) 함수에서 참조되는 확인할 수 없는 외부 기호
-C:\Users\김정호\Desktop\Test\ServerTermProject\x64\Debug\ServerTermProject.exe : fatal error LNK1120: 2개의 확인할 수 없는 외부 참조입니다.
+  ServerTermProject.vcxproj -> C:\Users\김정호\Documents\GitHub\ServerProject\ServerTermProject\x64\Debug\ServerTermProject.exe

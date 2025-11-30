@@ -95,8 +95,35 @@ void GameServer::ready() {
 
 DWORD WINAPI GameServer::ClientThread(LPVOID arg) {
 	ThreadArgs* args = static_cast<ThreadArgs*>(arg);
+	GameServer* server = args->server;
+	
 	while (true) {
+		char IDbuf[8];
+		char buf[DATASIZE];
+		int id{};
+		int quest{};
+		EnterCriticalSection(&server->m_clientListCS);
+		recv(*args->sock, IDbuf, sizeof(IDbuf), 0);
+		LeaveCriticalSection(&server->m_clientListCS);
 		
+		memcpy(&quest, IDbuf, sizeof(int));
+		memcpy(&quest, IDbuf + sizeof(int), sizeof(int));
+
+		EnterCriticalSection(&server->m_clientListCS);
+		recv(*args->sock, buf, sizeof(buf), 0);
+		LeaveCriticalSection(&server->m_clientListCS);
+
+		BaseTask* BT = new BaseTask;
+
+		EnterCriticalSection(&server->m_clientListCS);
+		BT->clientSocket = server->m_clientList[id];
+		LeaveCriticalSection(&server->m_clientListCS);
+
+		BT->taskType = quest;
+
+		memcpy(BT->data, buf, sizeof(buf));
+		server->threadQueue.Push(BT);
+
 	}
 	return 0;
 }
@@ -128,35 +155,20 @@ DWORD WINAPI GameServer::GameLogic(LPVOID arg) {
 }
 
 void GameServer::HandleCardRequest(BaseTask* arg) {
-	int playerNum{};
-	for (int i = 0; i < 2; ++i) {
-		EnterCriticalSection(&m_clientListCS);
-		if (arg->clientSocket == m_clientList[i]) playerNum = i;
-		LeaveCriticalSection(&m_clientListCS);
-	}
 	
-	char buf[DATASIZE];
-	memcpy(buf, &playerNum, sizeof(playerNum));
-
-	LeaveCriticalSection(&m_clientListCS);
 	for (int i = 0; i < 2; ++i) {
 		EnterCriticalSection(&m_clientListCS);
-		send(*m_clientList[i], buf, sizeof(playerNum), 0);
 		send(*m_clientList[i], arg->data, sizeof(arg->data), 0);
 		LeaveCriticalSection(&m_clientListCS);
 	}
 }
 
 void GameServer::HandleCollisionRequest(BaseTask* arg) {
-	int playerNum{};
 	for (int i = 0; i < 2; ++i) {
 		EnterCriticalSection(&m_clientListCS);
-		if (arg->clientSocket == m_clientList[i]) playerNum = i;
+		send(*m_clientList[i], arg->data, sizeof(arg->data), 0);
 		LeaveCriticalSection(&m_clientListCS);
 	}
-
-	char buf[DATASIZE];
-	memcpy(buf, &playerNum, sizeof(playerNum));
 }
 
 
