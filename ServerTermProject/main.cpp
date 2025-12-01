@@ -16,5 +16,6 @@ private:
 
 int main() {
 	WSAStart wsa;
-
+	GameServer gs{ 9000 } ;
+	gs.ready();
 }

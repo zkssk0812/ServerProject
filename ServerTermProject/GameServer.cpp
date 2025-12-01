@@ -95,8 +95,18 @@ void GameServer::ready() {
 
 DWORD WINAPI GameServer::ClientThread(LPVOID arg) {
 	ThreadArgs* args = static_cast<ThreadArgs*>(arg);
+	
 	while (true) {
-		
+		int taskType;
+		char buf[DATASIZE]{};
+		recv(*args->sock, buf, sizeof(buf), 0);
+		memcpy(&taskType, buf, sizeof(int));
+		BaseTask* BT = new BaseTask;
+		BT->clientSocket = args->sock;
+		BT->taskType = taskType;
+		memcpy(BT->data, buf, sizeof(buf));
+
+		args->server->threadQueue.Push(BT);
 	}
 	return 0;
 }
@@ -128,35 +138,23 @@ DWORD WINAPI GameServer::GameLogic(LPVOID arg) {
 }
 
 void GameServer::HandleCardRequest(BaseTask* arg) {
-	int playerNum{};
-	for (int i = 0; i < 2; ++i) {
-		EnterCriticalSection(&m_clientListCS);
-		if (arg->clientSocket == m_clientList[i]) playerNum = i;
-		LeaveCriticalSection(&m_clientListCS);
-	}
-	
-	char buf[DATASIZE];
-	memcpy(buf, &playerNum, sizeof(playerNum));
 
-	LeaveCriticalSection(&m_clientListCS);
 	for (int i = 0; i < 2; ++i) {
 		EnterCriticalSection(&m_clientListCS);
-		send(*m_clientList[i], buf, sizeof(playerNum), 0);
 		send(*m_clientList[i], arg->data, sizeof(arg->data), 0);
 		LeaveCriticalSection(&m_clientListCS);
 	}
+
+	delete arg;
 }
 
 void GameServer::HandleCollisionRequest(BaseTask* arg) {
-	int playerNum{};
 	for (int i = 0; i < 2; ++i) {
 		EnterCriticalSection(&m_clientListCS);
-		if (arg->clientSocket == m_clientList[i]) playerNum = i;
+		send(*m_clientList[i], arg->data, sizeof(arg->data), 0);
 		LeaveCriticalSection(&m_clientListCS);
 	}
-
-	char buf[DATASIZE];
-	memcpy(buf, &playerNum, sizeof(playerNum));
+	delete arg;
 }
 
 

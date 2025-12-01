@@ -13,7 +13,7 @@
 #define CLIENTTHREAD1 1
 #define CLIENTTHREAD2 2
 #define CLIENTTHREAD3 3
-#define DATASIZE 64
+#define DATASIZE 20
 
 void err_quit(const char* msg);
 
