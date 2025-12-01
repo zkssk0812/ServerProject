@@ -1,12 +1,14 @@
 #include "function.h"
 #include <random>
 
-// 수정1
+// --- [네트워크] 1. GameClient 헤더 및 외부 변수 선언 ---
 #include "GameClient.h"
-// 수정 1
-
 
 extern GameClient* g_NetworkClient;
+
+// [중요] main.cpp에서 접속 성공 후, 이 변수에 내 ID(0 또는 1)를 저장해야 합니다.
+// 0이면 Player1(서버장), 1이면 Player2(참가자)로 동작합니다.
+extern int g_PlayerID;
 
 
 extern GLfloat Card[] = {
@@ -227,7 +229,7 @@ void InitTexture_obj()
 	data = stbi_load("Player2_D.png", &widthImage, &heightImage, &numberOfChannel, 0);
 	glTexImage2D(GL_TEXTURE_2D, 0, 3, widthImage, heightImage, 0, GL_RGB, GL_UNSIGNED_BYTE, data);
 	stbi_image_free(data);
-	
+
 	glUseProgram(s_Objprogram);
 	int tLocation = glGetUniformLocation(s_Objprogram, "outTexture");
 	glUniform1i(tLocation, 0);
@@ -245,7 +247,7 @@ void InitBuffer_card()// 카드 전용 버퍼
 	glEnableVertexAttribArray(0);
 	glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(3 * sizeof(float)));
 	glEnableVertexAttribArray(1);
-	
+
 }
 
 void InitTexture_card() // 카드 전용 텍스트 버퍼
@@ -528,7 +530,7 @@ void Display()
 				glBindTexture(GL_TEXTURE_2D, objtextures[i]);
 				glDrawArrays(GL_TRIANGLES, 0, 36);
 			}
-			
+
 		}
 		else {
 
@@ -550,7 +552,7 @@ void Display()
 				glBindTexture(GL_TEXTURE_2D, objtextures[3 + i]);
 				glDrawArrays(GL_TRIANGLES, 0, 36);
 			}
-			
+
 		}
 	}
 
@@ -580,7 +582,7 @@ void Display()
 			glDrawArrays(GL_TRIANGLES, 0, 6);
 		}*/
 	}
-	
+
 
 	glutSwapBuffers();
 }
@@ -598,7 +600,7 @@ void TimerFunc(int value)
 	for (int i = 0; i < PLAYERNUM; ++i) {
 		Player1[i].move(Map[Player1[i].getZ() - 1][Player1[i].getX()].getY(), Map[Player1[i].getZ() + 1][Player1[i].getX()].getY(), Map[Player1[i].getZ() - 2][Player1[i].getX()].getY(), Map[Player1[i].getZ() + 2][Player1[i].getX()].getY(), Map[Player1[i].getZ()][Player1[i].getX()].getY(), &Player2Score);
 		Player2[i].move(Map[Player2[i].getZ() - 1][Player2[i].getX()].getY(), Map[Player2[i].getZ() + 1][Player2[i].getX()].getY(), Map[Player2[i].getZ() - 2][Player2[i].getX()].getY(), Map[Player2[i].getZ() + 2][Player2[i].getX()].getY(), Map[Player2[i].getZ()][Player2[i].getX()].getY(), &Player1Score);
-		
+
 	}
 
 	for (int i = 0; i < mapSize; ++i)
@@ -614,11 +616,8 @@ void TimerFunc(int value)
 		Card1.DistroyMap = true;
 	}*/
 
-
 	if (cameraRotateY)
 		rotateCamera();
-
-
 
 	check_collision();
 	glutTimerFunc(25, TimerFunc, 1);
@@ -626,6 +625,7 @@ void TimerFunc(int value)
 }
 
 
+// --- [네트워크] 키보드 입력 시 서버 전송 및 ID별 제어 로직 ---
 void Keyboard(unsigned char key, int x, int y)
 {
 	time_t timer = time(NULL);
@@ -639,171 +639,103 @@ void Keyboard(unsigned char key, int x, int y)
 
 	if (isMove) return;
 
-	switch (key)
-	{
-	case '1':
+	// 카드 선택 (1~5번 키)
+	if (key >= '1' && key <= '5') {
+		int cardIndex = key - '1'; // 0~4 인덱스 변환
 
 		if (MoveTime) {
-			if (uid_dir == FALL)
-				uid_dir = BACK;
+			if (uid_dir == FALL) uid_dir = BACK;
 
-		
-			int dis = Card1.getCardMove(0);
-			int drection = Card1.getcardDirection(0);
+			// 카드 정보 가져오기
+			int dis = Card1.getCardMove(cardIndex);
+			int drection = Card1.getcardDirection(cardIndex);
 
+			// --- [네트워크] g_PlayerID에 따른 분기 ---
 			if (g_NetworkClient) {
-				g_NetworkClient->CardSendDate(dis, drection);
+				// (1) 네트워크 플레이 중일 때
+				// Player 1(ID=0)인 경우
+				if (g_PlayerID == 0) {
+					// 내가 Player1이면 전송하고 내 말 움직임 (서버 동기화는 별도 수신 스레드에서 처리하지만, 
+					// 만약 예측 이동(Local Prediction)을 원하면 여기서 changeDirection 호출)
+					// 일단 서버로 보냄
+					g_NetworkClient->CardSendDate(dis, drection, currentPlayer);
+					// 여기서는 로컬 이동을 막고 서버 응답을 기다릴지, 아니면 바로 움직일지 결정해야 합니다.
+					// 일반적으로는 서버 응답으로 움직이지만, 반응성을 위해 로컬에서 바로 움직이기도 합니다.
+					// 기존 로직 유지를 위해 로컬에서도 바로 움직입니다.
+					Player1[currentPlayer].changeDirection(drection, dis);
+				}
+				// Player 2(ID=1)인 경우
+				else if (g_PlayerID == 1) {
+					g_NetworkClient->CardSendDate(dis, drection, currentPlayer);
+					Player2[currentPlayer].changeDirection(drection, dis);
+				}
+			}
+			else {
+				// (2) 네트워크가 아닐 때 (싱글/오프라인)
+				// 기존처럼 ID 상관없이 Player1을 움직임 (혹은 테스트 로직대로)
+				// 요청하신 대로 id==0이면 P1, id==1이면 P2 제어
+				if (g_PlayerID == 0)
+					Player1[currentPlayer].changeDirection(drection, dis);
+				else if (g_PlayerID == 1)
+					Player2[currentPlayer].changeDirection(drection, dis);
+				// (기존 코드의 기본 동작은 Player1을 움직이는 것이었음)
 			}
 
-	
-			Player1[currentPlayer].changeDirection(drection, dis);
-			Card1.cardDelete(0);
-			Card1.cardInsert(uid_dis, uid_dir);
-			isMove = true;
-		}
-
-
-		MoveTime = false; 
-		break;
-
-	case '2':
-
-		if (MoveTime) {
-			if (uid_dir == FALL)
-				uid_dir = BACK;
-
-			
-			int dis = Card1.getCardMove(1);
-			int drection = Card1.getcardDirection(1);
-
-			if (g_NetworkClient) {
-				g_NetworkClient->CardSendDate(dis, drection);
-			}
-
-			Player1[currentPlayer].changeDirection(drection, dis);
-			Card1.cardDelete(1);
-			Card1.cardInsert(uid_dis, uid_dir);
-			isMove = true;
-		}
-
-
-		MoveTime = false;
-		break;
-
-	case '3':
-
-		if (MoveTime) {
-			if (uid_dir == FALL)
-				uid_dir = BACK;
-
-			
-			int dis = Card1.getCardMove(2);
-			int drection = Card1.getcardDirection(2);
-
-			if (g_NetworkClient) {
-				g_NetworkClient->CardSendDate(dis, drection);
-			}
-
-			Player1[currentPlayer].changeDirection(drection, dis);
-			Card1.cardDelete(2);
-			Card1.cardInsert(uid_dis, uid_dir);
-			isMove = true;
-
-		}
-
-
-		MoveTime = false;
-		break;
-
-	case '4':
-
-
-		if (MoveTime) {
-			if (uid_dir == FALL)
-				uid_dir = BACK;
-
-			
-			int dis = Card1.getCardMove(3);
-			int drection = Card1.getcardDirection(3);
-
-			if (g_NetworkClient) {
-				g_NetworkClient->CardSendDate(dis, drection);
-			}
-
-			Player1[currentPlayer].changeDirection(drection, dis);
-			Card1.cardDelete(3);
-			Card1.cardInsert(uid_dis, uid_dir);
-			isMove = true;
-		}
-
-
-		MoveTime = false;
-		break;
-	case '5':
-
-		if (MoveTime) {
-			if (uid_dir == FALL)
-				uid_dir = BACK;
-
-			
-			int dis = Card1.getCardMove(4);
-			int drection = Card1.getcardDirection(4);
-
-			if (g_NetworkClient) {
-				g_NetworkClient->CardSendDate(dis, drection);
-			}
-
-			Player1[currentPlayer].changeDirection(drection, dis);
-			Card1.cardDelete(4);
+			// 카드 교체
+			Card1.cardDelete(cardIndex);
 			Card1.cardInsert(uid_dis, uid_dir);
 			isMove = true;
 		}
 
 		MoveTime = false;
-		break;
-	case 'A':
-	case 'a': 
-		MoveTime = true;
-		currentPlayer = 0; 
-		break;
-	case 'S':
-	case 's':
-		MoveTime = true;
-		currentPlayer = 1;
-		break;
-	case 'D':
-	case 'd':
-		MoveTime = true;
-		currentPlayer = 2;
-		break;
-	case 'c':
-	case 'C':
-		change_card();
-		break;
-	case 'R':
-		if (!cameraRotateMinus)
+	}
+	else {
+		switch (key)
 		{
-			cameraRotateMinus = true;
-			cameraRotateY = true;
+		case 'A':
+		case 'a': // 처음 플레이어 선택
+			MoveTime = true;
+			currentPlayer = 0; // 현재 플래이서 선택 넘버
+			break;
+		case 'S':
+		case 's':
+			MoveTime = true;
+			currentPlayer = 1;
+			break;
+		case 'D':
+		case 'd':
+			MoveTime = true;
+			currentPlayer = 2;
+			break;
+		case 'c':
+		case 'C':
+			change_card();
+			break;
+		case 'R':
+			if (!cameraRotateMinus)
+			{
+				cameraRotateMinus = true;
+				cameraRotateY = true;
+			}
+			else
+				cameraRotateY = !cameraRotateY;
+			break;
+		case 'r':
+			if (cameraRotateMinus)
+			{
+				cameraRotateMinus = false;
+				cameraRotateY = true;
+			}
+			else
+				cameraRotateY = !cameraRotateY;
+			break;
+		case 'Q':
+		case 'q':
+			glutLeaveMainLoop();
+			break;
+		default:
+			break;
 		}
-		else
-			cameraRotateY = !cameraRotateY;
-		break;
-	case 'r':
-		if (cameraRotateMinus)
-		{
-			cameraRotateMinus = false;
-			cameraRotateY = true;
-		}
-		else
-			cameraRotateY = !cameraRotateY;
-		break;
-	case 'Q':
-	case 'q':
-		glutLeaveMainLoop();
-		break;
-	default:
-		break;
 	}
 	glutPostRedisplay();
 }
@@ -872,7 +804,7 @@ void change_card()
 
 		if (uid_dir == FALL)
 			uid_dir = BACK;
-		
+
 		Card1.cardInsert(uid_dis, uid_dir);
 
 		uid_dis = uid_card(dreCard);
@@ -899,15 +831,17 @@ void Drawtext()
 
 void check_collision()
 {
-
+	// 1. Player1(i)이 Player2(j) 자리에 감 -> Player2가 죽음
 	for (int i = 0; i < PLAYERNUM; ++i)
 	{
 		for (int j = 0; j < PLAYERNUM; ++j)
 		{
 			if (!Player1[i].checkDead() && !Player2[j].checkDead() && Player1[i].getX() == Player2[j].getX() && Player1[i].getZ() == Player2[j].getZ())
 			{
-				if (g_NetworkClient) {
-					g_NetworkClient->PlayerSendDate(i, j);
+				// --- [네트워크] ---
+				// 내가 Player2(ID=1)라면, 내 말이 죽었음을 서버에 알림
+				if (g_NetworkClient && g_PlayerID == 1) {
+					g_NetworkClient->PlayerSendDate(1, j);
 				}
 
 				Player1Score += 1;
@@ -916,13 +850,19 @@ void check_collision()
 		}
 	}
 
+	// 2. Player2(i)가 Player1(j) 자리에 감 -> Player1이 죽음
 	for (int i = 0; i < PLAYERNUM; ++i)
 	{
 		for (int j = 0; j < PLAYERNUM; ++j)
 		{
-		
 			if (!Player2[i].checkDead() && !Player1[j].checkDead() && Player1[i].getX() == Player2[j].getX() && Player1[i].getZ() == Player2[j].getZ())
 			{
+				// --- [네트워크] ---
+				// 내가 Player1(ID=0)라면, 내 말이 죽었음을 서버에 알림
+				if (g_NetworkClient && g_PlayerID == 0) {
+					g_NetworkClient->PlayerSendDate(0, j);
+				}
+
 				Player2Score += 1;
 				Player1[j].die();
 			}
@@ -930,8 +870,6 @@ void check_collision()
 	}
 
 }
-
-
 
 void InitGame()
 {
@@ -996,5 +934,3 @@ void rotateCamera()
 		cameraXYZ[2] = tmpZ;
 	}
 }
-
-

@@ -9,8 +9,8 @@
 
 #define CM_REQUEST_CARD 100        // 카드를 사용했음을 알림
 #define CM_REQUEST_COLLISION 101   // 말이 충돌했음을 알림
-#define BUFSIZE 512
-#define DATASIZE 64
+#define BUFSIZE 20
+#define DATASIZE 20
 
 // 서버와 통신할 패킷 구조체 (서버와 동일)
 struct BaseTask {
@@ -26,13 +26,15 @@ public:
     bool ConnectToServer();
 
     // 데이터 전송 함수
-    void CardSendDate(int dis, int drection);
+    void CardSendDate(int dis, int drection, int playerNum);
     void PlayerSendDate(int id, int playerNum);
 
 private:
     std::string ServerIp;
     int Port;
     SOCKET sock;
+
+    int id;
 
     // [김윤기 담당] 스레드 및 동기화 관련 변수
     static DWORD WINAPI ClientRecvThread(LPVOID arg);      // 서버에서 받아서 큐에 넣는 스레드

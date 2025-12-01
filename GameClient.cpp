@@ -29,6 +29,12 @@ bool GameClient::ConnectToServer() {
         return false;
     }
 
+    char buf[4];
+
+    recv(sock, buf, 4, 0);
+
+    memcpy(&id, buf, sizeof(int));
+
     printf("[클라이언트] 서버 연결 성공!\n");
 
     // [김윤기 핵심] 수신 스레드와 업데이트 스레드 실행
@@ -56,64 +62,56 @@ DWORD WINAPI GameClient::ClientRecvThread(LPVOID arg) {
             task->taskType = protocol;
 
             // 데이터 부분 복사 (프로토콜 이후 데이터)
-            int dataLen = retval - sizeof(int);
+
+
+            int dataLen = retval - sizeof(int); // 전체 길이에서 프로토콜 크기(4) 뺌
             if (dataLen > 0) {
-                if (dataLen > DATASIZE) dataLen = DATASIZE;
+                if (dataLen > DATASIZE) dataLen = DATASIZE; // 안전장치
                 memcpy(task->data, buf + sizeof(int), dataLen);
             }
 
-            // 큐에 넣기 (동기화됨)
-            client->threadQueue.Push(task);
+
+            // 그냥 바로 전달
+            client->ApplyServerSync(task);
         }
     }
     return 0;
 }
 
-// [스레드 2] 큐에서 데이터를 꺼내 게임에 적용하는 역할 (Consumer) - 김윤기 담당
-DWORD WINAPI GameClient::GameStateUpdateThread(LPVOID arg) {
-    GameClient* client = (GameClient*)arg;
+// [스레드 2] 큐에서 데이터를 꺼내 게임에 적용하는 역할 (Consumer) - 김윤기 담당 -> 필요 없음
 
-    while (true) {
-        // 큐에서 작업 꺼내기 (대기 상태)
-        BaseTask* task = client->threadQueue.Pop();
-
-        // 실제 게임 오브젝트에 동기화 적용
-        client->ApplyServerSync(task);
-
-        delete task; // 메모리 해제
-    }
-    return 0;
-}
 
 // [핵심 로직] 서버 데이터를 실제 게임 오브젝트(Player1, Player2)에 반영
 void GameClient::ApplyServerSync(BaseTask* task) {
-    // task->data 구조: [PlayerNum(4byte)] + [RealData...]
+    // task->data 구조: [id] + [말 번호] + [RealData...]
+    char* realData = task->data + sizeof(int);
+    int data[4]{};
 
-    int playerNum = -1;
-    memcpy(&playerNum, task->data, sizeof(int)); // 누가 보냈는지 확인
+    for (int i = 0; i < 4; ++i) {
+        int offset = i * sizeof(int);
+        memcpy(data + i, realData + offset, sizeof(int)); // 데이터를 미리 처리해서 저장
+    }
+
+    int Player = data[0];
+    int PlayerNum = data[1];
 
     // 실제 데이터는 playerNum(4byte) 뒤에 있음
-    char* realData = task->data + sizeof(int);
+
 
     if (task->taskType == CM_REQUEST_CARD) {
         // 카드 이동 정보: [Distance(int)] + [Direction(int)]
-        int dist = 0;
-        int direction = 0;
+        int dist = data[2];
+        int direction = data[3];
 
-        // 데이터 파싱 (순서 중요: CardSendDate에서 보낸 순서대로)
-        // 실제 데이터를 읽어옵니다. (거리 + 방향)
-        memcpy(&dist, realData, sizeof(int));
-        memcpy(&direction, realData + sizeof(int), sizeof(int));
-
-        printf("[Sync] Player %d Move: Dist %d, Dir %d\n", playerNum, dist, direction);
+        printf("[Sync] Player %d Move: Dist %d, Dir %d\n", Player, dist, direction);
 
         // [핵심] 전역 변수(Player1, Player2)에 접근하여 움직임 동기화
         // function.h에 선언된 Player1, Player2 객체를 사용합니다.
-        if (playerNum == 0) {
+        if (Player == 0) {
             // Player 0번이 움직였다면 -> 내 화면의 Player1[0] 객체를 움직임
             Player1[0].changeDirection(direction, dist);
         }
-        else if (playerNum == 1) {
+        else if (Player == 1) {
             // Player 1번이 움직였다면 -> 내 화면의 Player2[0] 객체를 움직임
             Player2[0].changeDirection(direction, dist);
         }
@@ -121,13 +119,16 @@ void GameClient::ApplyServerSync(BaseTask* task) {
     else if (task->taskType == CM_REQUEST_COLLISION) {
         // 충돌 정보 처리
         // 예: 누가 충돌했는지 식별 후 die() 호출 등
-        if (playerNum == 0) {
-            Player1[0].die(); // 예시 로직
+        int DeletePlayer = data[2];
+        int DeletePlayerNum = data[3];
+
+        if (DeletePlayer == 0) {
+            Player1[DeletePlayerNum].die(); // 예시 로직
         }
-        else if (playerNum == 1) {
-            Player2[0].die();
+        else if (DeletePlayer == 1) {
+            Player2[DeletePlayerNum].die();
         }
-        printf("[Sync] Player %d Collision!\n", playerNum);
+        printf("[Sync] Player %d Collision!\n", Player);
     }
 }
 
@@ -135,7 +136,7 @@ void GameClient::ApplyServerSync(BaseTask* task) {
 // [전송 함수] 여기서부터는 Client가 Server로 보낼 때 사용
 // ---------------------------------------------------------
 
-void GameClient::CardSendDate(int dis, int drection) {
+void GameClient::CardSendDate(int dis, int drection, int playerNum) {
     if (sock == INVALID_SOCKET) return;
 
     // 프로토콜(100) + 거리(int) + 방향(int)
@@ -147,11 +148,19 @@ void GameClient::CardSendDate(int dis, int drection) {
     memcpy(buf + offset, &protocol, sizeof(int));
     offset += sizeof(int);
 
-    // 2. 데이터 복사 (거리)
+    // 2. id
+    memcpy(buf + offset, &id, sizeof(int));
+    offset += sizeof(int);
+
+    // 3. 말
+    memcpy(buf + offset, &playerNum, sizeof(int));
+    offset += sizeof(int);
+
+    // 4. 데이터 복사 (거리)
     memcpy(buf + offset, &dis, sizeof(int));
     offset += sizeof(int);
 
-    // 3. 데이터 복사 (방향)
+    // 5. 데이터 복사 (방향)
     memcpy(buf + offset, &drection, sizeof(int));
     offset += sizeof(int);
 
@@ -177,4 +186,12 @@ void GameClient::PlayerSendDate(int id, int playerNum) {
     offset += sizeof(int);
 
     send(sock, buf, offset, 0);
+}
+
+
+// [김윤기 담당] 스레드 2 - 현재 구조상 RecvThread에서 바로 처리하므로 비워둡니다.
+// 링커 오류 방지를 위해 껍데기만 유지합니다.
+DWORD WINAPI GameClient::GameStateUpdateThread(LPVOID arg) {
+    // 할 일 없음 (Recv 스레드에서 ApplyServerSync를 직접 호출하고 있으므로)
+    return 0;
 }
